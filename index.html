@@ -2,318 +2,207 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AGRUCOL E.S.P. | Animación de píxeles</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AGRUCOL E.S.P. - Animación de píxeles</title>
+<style>
+* { box-sizing: border-box; }
 
-  <style>
-    * {
-      box-sizing: border-box;
-    }
+body {
+  margin: 0;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+}
 
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #ffffff;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-    }
+.contenedor {
+  width: 100%;
+  max-width: 1100px;
+  margin: auto;
+  padding: 10px;
+  text-align: center;
+}
 
-    .contenedor {
-      width: 100%;
-      max-width: 1100px;
-      padding: 12px;
-      text-align: center;
-    }
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #ffffff;
+}
 
-    .marco {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      position: relative;
-      overflow: hidden;
-      background: #f4f7f2;
-      border-radius: 12px;
-    }
-
-    canvas {
-      display: block;
-      width: 100%;
-      height: 100%;
-    }
-
-    #mensaje {
-      margin-top: 10px;
-      color: #285d36;
-      font-size: 14px;
-    }
-
-    .marca {
-      margin-top: 8px;
-      color: #26723b;
-      font-size: 12px;
-      font-weight: bold;
-      letter-spacing: 2px;
-    }
-  </style>
+.titulo {
+  color: #26723b;
+  font-size: 20px;
+  font-weight: bold;
+  margin: 10px 0;
+}
+</style>
 </head>
-
 <body>
-  <main class="contenedor">
-    <div class="marco">
-      <canvas id="animacion"></canvas>
-    </div>
-    <div id="mensaje">Preparando animación de AGRUCOL...</div>
-    <div class="marca">AGRUCOL E.S.P. · RECICLAMOS FUTURO</div>
-  </main>
+<div class="contenedor">
+  <div class="titulo">AGRUCOL E.S.P.</div>
+  <canvas id="lienzo" width="960" height="540"></canvas>
+</div>
 
-  <script>
-    const canvas = document.getElementById("animacion");
-    const ctx = canvas.getContext("2d");
-    const mensaje = document.getElementById("mensaje");
+<script>
+const canvas = document.getElementById("lienzo");
+const ctx = canvas.getContext("2d");
 
-    // Las siete fotografías deben estar dentro de la carpeta images.
-    const rutas = [
-      "images/foto1.jpg",
-      "images/foto2.jpg",
-      "images/foto3.jpg",
-      "images/foto4.jpg",
-      "images/foto5.jpg",
-      "images/foto6.jpg",
-      "images/foto7.jpg"
-    ];
+const rutas = [
+  "images/foto1.jpg",
+  "images/foto2.jpg",
+  "images/foto3.jpg",
+  "images/foto4.jpg",
+  "images/foto5.jpg",
+  "images/foto6.jpg",
+  "images/foto7.jpg"
+];
 
-    const columnas = 120;
-    const filas = 68;
-    const cantidad = columnas * filas;
-    const tamano = 960 / columnas;
+const imagenes = [];
+let indice = 0;
+let particulas = [];
+let fase = "formar";
+let inicio = performance.now();
 
-    let particulas = [];
-    let imagenes = [];
-    let indice = 0;
-    let fase = "formar";
-    let inicioFase = performance.now();
-    let ultimaImagen = -1;
+const columnas = 120;
+const filas = 68;
+const anchoPixel = canvas.width / columnas;
+const altoPixel = canvas.height / filas;
 
-    const duracionFormar = 1800;
-    const duracionQuieto = 1300;
-    const duracionDispersar = 1100;
+const tiempos = {
+  formar: 1800,
+  mostrar: 1800,
+  dispersar: 1200
+};
 
-    const imagenMosaico = document.createElement("canvas");
-    imagenMosaico.width = columnas;
-    imagenMosaico.height = filas;
+function cargarImagen(url) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
+}
 
-    const mosaicCtx = imagenMosaico.getContext("2d", {
-      willReadFrequently: true
-    });
+async function iniciar() {
+  for (const ruta of rutas) {
+    const img = await cargarImagen(ruta);
+    if (img) imagenes.push(img);
+    else console.error("No se pudo cargar:", ruta);
+  }
 
-    canvas.width = 960;
-    canvas.height = 540;
+  if (imagenes.length === 0) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#26723b";
+    ctx.font = "bold 26px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText("No se encontraron las fotos", 480, 260);
+    return;
+  }
 
-    function cargarImagen(ruta) {
-      return new Promise((resolve) => {
-        const img = new Image();
+  prepararFoto();
+  requestAnimationFrame(animar);
+}
 
-        img.onload = () => resolve({
-          imagen: img,
-          ruta: ruta,
-          correcta: true
-        });
+function prepararFoto() {
+  const img = imagenes[indice];
+  const mini = document.createElement("canvas");
+  mini.width = columnas;
+  mini.height = filas;
+  const mctx = mini.getContext("2d", {
+    willReadFrequently: true
+  });
 
-        img.onerror = () => resolve({
-          imagen: null,
-          ruta: ruta,
-          correcta: false
-        });
+  // Ajusta la fotografía para que se vea completa.
+  const escala = Math.min(
+    columnas / img.width,
+    filas / img.height
+  );
+  const w = img.width * escala;
+  const h = img.height * escala;
+  const x = (columnas - w) / 2;
+  const y = (filas - h) / 2;
 
-        img.src = ruta;
+  mctx.fillStyle = "#ffffff";
+  mctx.fillRect(0, 0, columnas, filas);
+  mctx.drawImage(img, x, y, w, h);
+
+  const datos = mctx.getImageData(
+    0, 0, columnas, filas
+  ).data;
+
+  particulas = [];
+
+  for (let py = 0; py < filas; py++) {
+    for (let px = 0; px < columnas; px++) {
+      const k = (py * columnas + px) * 4;
+      const angulo = Math.random() * Math.PI * 2;
+      const distancia = 200 + Math.random() * 500;
+
+      particulas.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height,
+        destinoX: px * anchoPixel,
+        destinoY: py * altoPixel,
+        color: `rgb(${datos[k]},${datos[k+1]},${datos[k+2]})`,
+        salidaX: Math.cos(angulo) * distancia,
+        salidaY: Math.sin(angulo) * distancia,
+        tamano: Math.max(anchoPixel, altoPixel) + 0.5
       });
     }
+  }
 
-    function prepararMosaico(img) {
-      const proporcionDestino = columnas / filas;
-      const proporcionImagen = img.width / img.height;
+  fase = "formar";
+  inicio = performance.now();
+}
 
-      let sx = 0;
-      let sy = 0;
-      let sw = img.width;
-      let sh = img.height;
+function animar(ahora) {
+  const duracion = tiempos[fase];
+  const progreso = Math.min(1, (ahora - inicio) / duracion);
+  const suave = progreso * progreso * (3 - 2 * progreso);
 
-      if (proporcionImagen > proporcionDestino) {
-        sw = img.height * proporcionDestino;
-        sx = (img.width - sw) / 2;
-      } else {
-        sh = img.width / proporcionDestino;
-        sy = (img.height - sh) / 2;
-      }
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      mosaicCtx.clearRect(0, 0, columnas, filas);
-      mosaicCtx.drawImage(
-        img, sx, sy, sw, sh,
-        0, 0, columnas, filas
-      );
+  for (const p of particulas) {
+    let x, y, alpha = 1;
 
-      const datos = mosaicCtx.getImageData(
-        0, 0, columnas, filas
-      ).data;
-
-      const colores = [];
-
-      for (let i = 0; i < cantidad; i++) {
-        const p = i * 4;
-        colores.push([
-          datos[p],
-          datos[p + 1],
-          datos[p + 2],
-          datos[p + 3]
-        ]);
-      }
-
-      return colores;
+    if (fase === "formar") {
+      x = p.x + (p.destinoX - p.x) * suave;
+      y = p.y + (p.destinoY - p.y) * suave;
+    } else if (fase === "mostrar") {
+      x = p.destinoX;
+      y = p.destinoY;
+    } else {
+      x = p.destinoX + p.salidaX * suave;
+      y = p.destinoY + p.salidaY * suave;
+      alpha = 1 - suave;
     }
 
-    function crearParticulas(colores) {
-      particulas = [];
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(x, y, p.tamano, p.tamano);
+  }
 
-      for (let y = 0; y < filas; y++) {
-        for (let x = 0; x < columnas; x++) {
-          const posicion = y * columnas + x;
-          const angulo = Math.random() * Math.PI * 2;
-          const distancia = 180 + Math.random() * 480;
+  ctx.globalAlpha = 1;
 
-          particulas.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            destinoX: x * tamano,
-            destinoY: y * tamano,
-            color: colores[posicion],
-            inicioX: 0,
-            inicioY: 0,
-            fueraX: Math.cos(angulo) * distancia,
-            fueraY: Math.sin(angulo) * distancia,
-            tamano: tamano + 0.3
-          });
-        }
-      }
+  if (progreso >= 1) {
+    if (fase === "formar") {
+      fase = "mostrar";
+    } else if (fase === "mostrar") {
+      fase = "dispersar";
+    } else {
+      indice = (indice + 1) % imagenes.length;
+      prepararFoto();
     }
+    inicio = ahora;
+  }
 
-    function cambiarImagen(nuevoIndice) {
-      const img = imagenes[nuevoIndice].imagen;
-      if (!img) return;
+  requestAnimationFrame(animar);
+}
 
-      const colores = prepararMosaico(img);
-      crearParticulas(colores);
-
-      indice = nuevoIndice;
-      ultimaImagen = nuevoIndice;
-      fase = "formar";
-      inicioFase = performance.now();
-
-      particulas.forEach(p => {
-        p.x = Math.random() * canvas.width;
-        p.y = Math.random() * canvas.height;
-        p.inicioX = p.x;
-        p.inicioY = p.y;
-      });
-    }
-
-    function dibujar(tiempo) {
-      const transcurrido = tiempo - inicioFase;
-
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      let progreso = 0;
-
-      if (fase === "formar") {
-        progreso = Math.min(1, transcurrido / duracionFormar);
-      } else if (fase === "quieto") {
-        progreso = 1;
-      } else {
-        progreso = Math.min(1, transcurrido / duracionDispersar);
-      }
-
-      const suave = progreso * progreso * (3 - 2 * progreso);
-
-      for (const p of particulas) {
-        let x = p.destinoX;
-        let y = p.destinoY;
-        let alpha = 1;
-
-        if (fase === "formar") {
-          x = p.inicioX + (p.destinoX - p.inicioX) * suave;
-          y = p.inicioY + (p.destinoY - p.inicioY) * suave;
-        } else if (fase === "dispersar") {
-          x = p.destinoX + p.fueraX * suave;
-          y = p.destinoY + p.fueraY * suave;
-          alpha = 1 - suave;
-        }
-
-        const c = p.color;
-        if (c[3] === 0) continue;
-
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
-        ctx.fillRect(x, y, p.tamano, p.tamano);
-      }
-
-      ctx.globalAlpha = 1;
-
-      if (fase === "formar" && progreso >= 1) {
-        fase = "quieto";
-        inicioFase = tiempo;
-      } else if (fase === "quieto" &&
-                 transcurrido >= duracionQuieto) {
-        fase = "dispersar";
-        inicioFase = tiempo;
-      } else if (fase === "dispersar" && progreso >= 1) {
-        const siguiente = (indice + 1) % imagenes.length;
-        cambiarImagen(siguiente);
-      }
-
-      requestAnimationFrame(dibujar);
-    }
-
-    async function iniciar() {
-      mensaje.textContent = "Cargando fotografías...";
-
-      imagenes = await Promise.all(rutas.map(cargarImagen));
-
-      const disponibles = imagenes.filter(item => item.correcta);
-
-      if (disponibles.length === 0) {
-        mensaje.textContent =
-          "No se encontraron las fotos. Revisa la carpeta images.";
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#285d36";
-        ctx.font = "bold 28px Arial";
-        ctx.textAlign = "center";
-        ctx.fillText("AGRUCOL E.S.P.", canvas.width / 2, 250);
-        ctx.font = "18px Arial";
-        ctx.fillText("No se pudieron cargar las imágenes.",
-          canvas.width / 2, 290);
-        return;
-      }
-
-      // Se utilizan únicamente las imágenes que cargaron bien.
-      imagenes = disponibles;
-
-      if (imagenes.length < rutas.length) {
-        mensaje.textContent =
-          `Se cargaron ${imagenes.length} de ${rutas.length} fotos.`;
-      } else {
-        mensaje.textContent =
-          "AGRUCOL E.S.P. · Animación de píxeles activa";
-      }
-
-      cambiarImagen(0);
-      requestAnimationFrame(dibujar);
-    }
-
-    iniciar();
-  </script>
+iniciar();
+</script>
 </body>
 </html>
+
 
